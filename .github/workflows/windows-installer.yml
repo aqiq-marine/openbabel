@@ -25,7 +25,18 @@ jobs:
 
       - name: Install Windows packaging tools
         shell: pwsh
-        run: choco install nsis swig 7zip -y --no-progress
+        run: |
+          choco install nsis swig 7zip -y --no-progress
+          $nsisDir = 'C:\Program Files (x86)\NSIS'
+          $pluginZip = Join-Path $env:RUNNER_TEMP 'EnVar-Plugin.zip'
+          Invoke-WebRequest `
+            -Uri 'https://github.com/GsNSIS/EnVar/releases/download/v0.3.1/EnVar-Plugin.zip' `
+            -OutFile $pluginZip
+          & 7z.exe x $pluginZip "-o$nsisDir" -y
+          if ($LASTEXITCODE -ne 0) { throw "Failed to install EnVar plugin (7z exit code $LASTEXITCODE)." }
+          $plugin = Get-ChildItem $nsisDir -Recurse -Filter 'EnVar.dll' -File | Select-Object -First 1
+          if ($null -eq $plugin) { throw "EnVar.dll was not installed under $nsisDir." }
+          Write-Host "EnVar plugin: $($plugin.FullName)"
 
       - name: Set Windows build paths
         shell: pwsh
