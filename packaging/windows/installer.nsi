@@ -32,195 +32,6 @@ RequestExecutionLevel admin
 
 Var STARTMENU_FOLDER
 
-; PATH is deliberately limited to the current user's environment. Do not
-; mirror the process PATH into HKCU: it may contain the merged system PATH.
-!define WriteEnvStr_RegKey 'HKCU "Environment"'
-
-!macro IsNT un
-Function ${un}IsNT
-  Push $0
-  ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion" CurrentVersion
-  StrCmp $0 "" 0 IsNT_yes
-  Pop $0
-  Push 0
-  Return
-IsNT_yes:
-  Pop $0
-  Push 1
-FunctionEnd
-!macroend
-!insertmacro IsNT ""
-!insertmacro IsNT "un."
-
-!macro StrStr un
-Function ${un}StrStr
-  Exch $R1
-  Exch
-  Exch $R2
-  Push $R3
-  Push $R4
-  Push $R5
-  StrLen $R3 $R1
-  StrCpy $R4 0
-loop:
-  StrCpy $R5 $R2 $R3 $R4
-  StrCmp $R5 $R1 done
-  StrCmp $R5 "" done
-  IntOp $R4 $R4 + 1
-  Goto loop
-done:
-  StrCpy $R1 $R2 "" $R4
-  Pop $R5
-  Pop $R4
-  Pop $R3
-  Pop $R2
-  Exch $R1
-FunctionEnd
-!macroend
-!insertmacro StrStr ""
-!insertmacro StrStr "un."
-
-Function Trim
-  Exch $R1
-  Push $R2
-Loop:
-  StrCpy $R2 "$R1" 1 -1
-  StrCmp "$R2" " " RTrim
-  StrCmp "$R2" "$\n" RTrim
-  StrCmp "$R2" "$\r" RTrim
-  StrCmp "$R2" ";" RTrim
-  Goto Done
-RTrim:
-  StrCpy $R1 "$R1" -1
-  Goto Loop
-Done:
-  Pop $R2
-  Exch $R1
-FunctionEnd
-
-Function AddToPath
-  Exch $0
-  Push $1
-  Push $2
-  Push $3
-  IfFileExists "$0\*.*" "" AddToPath_done
-
-  ; Read only the user PATH. Never use ReadEnvStr PATH here because that is
-  ; the process environment and can include the merged system PATH.
-  ReadRegStr $1 HKCU "Environment" "PATH"
-
-  ; If the user PATH is genuinely empty/unset, safely create it from the
-  ; installation directory. Otherwise preserve every existing entry.
-  StrCmp $1 "" AddToPath_NTdoIt
-
-  Push "$1;"
-  Push "$0;"
-  Call StrStr
-  Pop $2
-  StrCmp $2 "" 0 AddToPath_done
-  Push "$1;"
-  Push "$0\;"
-  Call StrStr
-  Pop $2
-  StrCmp $2 "" 0 AddToPath_done
-  GetFullPathName /SHORT $3 $0
-  Push "$1;"
-  Push "$3;"
-  Call StrStr
-  Pop $2
-  StrCmp $2 "" 0 AddToPath_done
-  Push "$1;"
-  Push "$3\;"
-  Call StrStr
-  Pop $2
-  StrCmp $2 "" 0 AddToPath_done
-
-  Push $1
-  Call Trim
-  Pop $1
-  StrCpy $0 "$0;$1"
-
-AddToPath_NTdoIt:
-  WriteRegExpandStr HKCU "Environment" "PATH" $0
-  SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
-
-AddToPath_done:
-  Pop $3
-  Pop $2
-  Pop $1
-  Pop $0
-FunctionEnd
-
-Function un.RemoveFromPath
-  Exch $0
-  Push $1
-  Push $2
-  Push $3
-  Push $4
-  Push $5
-  Push $6
-  Call un.IsNT
-  Pop $1
-  StrCmp $1 1 unRemoveFromPath_NT
-    StrCpy $1 $WINDIR 2
-    FileOpen $1 "$1\autoexec.bat" r
-    GetTempFileName $4
-    FileOpen $2 $4 w
-    GetFullPathName /SHORT $0 $0
-    StrCpy $0 "SET PATH=%PATH%;$0"
-    Goto unRemoveFromPath_dosLoop
-unRemoveFromPath_dosLoop:
-  FileRead $1 $3
-  StrCpy $5 $3 1 -1
-  StrCmp $5 $6 0 +2
-    StrCpy $3 $3 -1
-  StrCmp $3 "$0$\r$\n" unRemoveFromPath_dosLoopRemoveLine
-  StrCmp $3 "$0$\n" unRemoveFromPath_dosLoopRemoveLine
-  StrCmp $3 "$0" unRemoveFromPath_dosLoopRemoveLine
-  StrCmp $3 "" unRemoveFromPath_dosLoopEnd
-  FileWrite $2 $3
-  Goto unRemoveFromPath_dosLoop
-unRemoveFromPath_dosLoopRemoveLine:
-  SetRebootFlag true
-  Goto unRemoveFromPath_dosLoop
-unRemoveFromPath_dosLoopEnd:
-  FileClose $2
-  FileClose $1
-  StrCpy $1 $WINDIR 2
-  Delete "$1\autoexec.bat"
-  CopyFiles /SILENT $4 "$1\autoexec.bat"
-  Delete $4
-  Goto unRemoveFromPath_done
-unRemoveFromPath_NT:
-  ReadRegStr $1 HKCU "Environment" "PATH"
-  StrCpy $5 $1 1 -1
-  StrCmp $5 ";" +2
-    StrCpy $1 "$1;"
-  Push $1
-  Push "$0;"
-  Call un.StrStr
-  Pop $2
-  StrCmp $2 "" unRemoveFromPath_done
-  StrLen $3 "$0;"
-  StrLen $4 $2
-  StrCpy $5 $1 -$4
-  StrCpy $6 $2 "" $3
-  StrCpy $3 $5$6
-  StrCpy $5 $3 1 -1
-  StrCmp $5 ";" 0 +2
-    StrCpy $3 $3 -1
-  WriteRegExpandStr HKCU "Environment" "PATH" $3
-  SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
-unRemoveFromPath_done:
-  Pop $6
-  Pop $5
-  Pop $4
-  Pop $3
-  Pop $2
-  Pop $1
-  Pop $0
-FunctionEnd
-
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\obgui.exe"
 !insertmacro MUI_PAGE_WELCOME
@@ -243,11 +54,22 @@ Section "Open Babel" SecOpenBabel
   File /nonfatal "${DepsDir}\libs-common\x64\*.dll"
   File /nonfatal "${DepsDir}\libs-vs12\x64\*.dll"
   File "${VCRedist}"
+
   WriteRegStr HKCU "Software\OpenBabel ${OBVERSION}" "" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenBabel-${OBVERSION}" "DisplayName" "OpenBabel-${OBVERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenBabel-${OBVERSION}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
-  Push $INSTDIR
-  Call AddToPath
+
+  ; Update only the current user's PATH. EnVar handles an unset/empty PATH
+  ; without copying the process's merged system PATH into HKCU.
+  EnVar::SetHKCU
+  Pop $0
+  EnVar::AddValue "PATH" "$INSTDIR"
+  Pop $0
+  StrCmp $0 "0" path_added
+    MessageBox MB_OK|MB_ICONSTOP "Failed to add Open Babel to the user PATH. The installation will be aborted. (EnVar error: $0)"
+    Abort
+path_added:
+
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
     CreateDirectory "$SMPROGRAMS\$STARTMENU_FOLDER"
@@ -259,8 +81,12 @@ Section "Open Babel" SecOpenBabel
 SectionEnd
 
 Section "Uninstall"
-  Push $INSTDIR
-  Call un.RemoveFromPath
+  ; Remove only this installation directory from the current user's PATH.
+  EnVar::SetHKCU
+  Pop $0
+  EnVar::DeleteValue "PATH" "$INSTDIR"
+  Pop $0
+
   Delete "$SMPROGRAMS\$STARTMENU_FOLDER\Open Babel GUI.lnk"
   Delete "$SMPROGRAMS\$STARTMENU_FOLDER\Uninstall.lnk"
   RMDir "$SMPROGRAMS\$STARTMENU_FOLDER"
