@@ -76,8 +76,12 @@ path_added:
     CreateShortCut "$SMPROGRAMS\$STARTMENU_FOLDER\Open Babel GUI.lnk" "$INSTDIR\obgui.exe"
     CreateShortCut "$SMPROGRAMS\$STARTMENU_FOLDER\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
   !insertmacro MUI_STARTMENU_WRITE_END
-  ExecWait '"$INSTDIR\vc_redist.x64.exe" /quiet'
+  ExecWait '"$INSTDIR\vc_redist.x64.exe" /quiet' $0
   Delete "$INSTDIR\vc_redist.x64.exe"
+  
+  ${If} $0 != 0
+      Abort "Visual C++ Redistributable installation failed with exit code $0."
+  ${EndIf}
 SectionEnd
 
 Section "Uninstall"
