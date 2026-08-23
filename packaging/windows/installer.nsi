@@ -87,6 +87,7 @@ Section "Uninstall"
   EnVar::DeleteValue "PATH" "$INSTDIR"
   Pop $0
 
+  !insertmacro MUI_STARTMENU_GETFOLDER Application $STARTMENU_FOLDER
   Delete "$SMPROGRAMS\$STARTMENU_FOLDER\Open Babel GUI.lnk"
   Delete "$SMPROGRAMS\$STARTMENU_FOLDER\Uninstall.lnk"
   RMDir "$SMPROGRAMS\$STARTMENU_FOLDER"
