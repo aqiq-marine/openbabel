@@ -32,13 +32,9 @@ RequestExecutionLevel admin
 
 Var STARTMENU_FOLDER
 
-!ifndef WriteEnvStr_RegKey
-!ifdef ALL_USERS
-!define WriteEnvStr_RegKey 'HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"'
-!else
+; PATH is deliberately limited to the current user's environment. Do not
+; mirror the process PATH into HKCU: it may contain the merged system PATH.
 !define WriteEnvStr_RegKey 'HKCU "Environment"'
-!endif
-!endif
 
 !macro IsNT un
 Function ${un}IsNT
@@ -108,51 +104,46 @@ Function AddToPath
   Push $2
   Push $3
   IfFileExists "$0\*.*" "" AddToPath_done
-  ReadEnvStr $1 PATH
+
+  ; Read only the user PATH. Never use ReadEnvStr PATH here because that is
+  ; the process environment and can include the merged system PATH.
+  ReadRegStr $1 HKCU "Environment" "PATH"
+
+  ; If the user PATH is genuinely empty/unset, safely create it from the
+  ; installation directory. Otherwise preserve every existing entry.
+  StrCmp $1 "" AddToPath_NTdoIt
+
   Push "$1;"
   Push "$0;"
   Call StrStr
   Pop $2
-  StrCmp $2 "" "" AddToPath_done
+  StrCmp $2 "" 0 AddToPath_done
   Push "$1;"
   Push "$0\;"
   Call StrStr
   Pop $2
-  StrCmp $2 "" "" AddToPath_done
+  StrCmp $2 "" 0 AddToPath_done
   GetFullPathName /SHORT $3 $0
   Push "$1;"
   Push "$3;"
   Call StrStr
   Pop $2
-  StrCmp $2 "" "" AddToPath_done
+  StrCmp $2 "" 0 AddToPath_done
   Push "$1;"
   Push "$3\;"
   Call StrStr
   Pop $2
-  StrCmp $2 "" "" AddToPath_done
-  Call IsNT
+  StrCmp $2 "" 0 AddToPath_done
+
+  Push $1
+  Call Trim
   Pop $1
-  StrCmp $1 1 AddToPath_NT
-    StrCpy $1 $WINDIR 2
-    FileOpen $1 "$1\autoexec.bat" a
-    FileSeek $1 -1 END
-    FileReadByte $1 $2
-    IntCmp $2 26 0 +2 +2
-      FileSeek $1 -1 END
-    FileWrite $1 "$\r$\nSET PATH=%PATH%;$3$\r$\n"
-    FileClose $1
-    SetRebootFlag true
-    Goto AddToPath_done
-AddToPath_NT:
-  ReadRegStr $1 ${WriteEnvStr_RegKey} "PATH"
-  StrCmp $1 "" AddToPath_NTdoIt
-    Push $1
-    Call Trim
-    Pop $1
-    StrCpy $0 "$0;$1"
+  StrCpy $0 "$0;$1"
+
 AddToPath_NTdoIt:
-  WriteRegExpandStr ${WriteEnvStr_RegKey} "PATH" $0
+  WriteRegExpandStr HKCU "Environment" "PATH" $0
   SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
+
 AddToPath_done:
   Pop $3
   Pop $2
@@ -201,7 +192,7 @@ unRemoveFromPath_dosLoopEnd:
   Delete $4
   Goto unRemoveFromPath_done
 unRemoveFromPath_NT:
-  ReadRegStr $1 ${WriteEnvStr_RegKey} "PATH"
+  ReadRegStr $1 HKCU "Environment" "PATH"
   StrCpy $5 $1 1 -1
   StrCmp $5 ";" +2
     StrCpy $1 "$1;"
@@ -218,7 +209,7 @@ unRemoveFromPath_NT:
   StrCpy $5 $3 1 -1
   StrCmp $5 ";" 0 +2
     StrCpy $3 $3 -1
-  WriteRegExpandStr ${WriteEnvStr_RegKey} "PATH" $3
+  WriteRegExpandStr HKCU "Environment" "PATH" $3
   SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
 unRemoveFromPath_done:
   Pop $6
