@@ -13,9 +13,26 @@ function Checkout-Repository([string]$Url, [string]$Directory, [string]$Commit) 
     if (Test-Path $Directory) {
         Remove-Item $Directory -Recurse -Force
     }
+
     git clone --depth 1 $Url $Directory
+    if ($LASTEXITCODE -ne 0) {
+        throw "git clone failed for $Url"
+    }
+
     git -C $Directory fetch --depth 1 origin $Commit
+    if ($LASTEXITCODE -ne 0) {
+        throw "git fetch failed for commit $Commit"
+    }
+
     git -C $Directory checkout $Commit
+    if ($LASTEXITCODE -ne 0) {
+        throw "git checkout failed for commit $Commit"
+    }
+
+    $Head = git -C $Directory rev-parse HEAD
+    if ($LASTEXITCODE -ne 0 -or $Head -ne $Commit) {
+        throw "Checked out commit $Head does not match requested commit $Commit"
+    }
 }
 
 Checkout-Repository 'https://github.com/openbabel/msvc-dependencies.git' $DepsDir $DepsCommit
