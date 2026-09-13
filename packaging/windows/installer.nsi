@@ -51,6 +51,7 @@ Section "Open Babel" SecOpenBabel
   SectionIn RO
   SetOutPath "$INSTDIR"
   File /r "${BuildDir}\bin\Release\*.*"
+  File /r "${BuildDir}\bin\data\*.*"
   File /nonfatal "${DepsDir}\libs-common\x64\*.dll"
   File /nonfatal "${DepsDir}\libs-vs12\x64\*.dll"
   File "${VCRedist}"
