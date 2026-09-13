@@ -51,7 +51,9 @@ Section "Open Babel" SecOpenBabel
   SectionIn RO
   SetOutPath "$INSTDIR"
   File /r "${BuildDir}\bin\Release\*.*"
-  File /r "${BuildDir}\bin\data\*.*"
+  SetOutPath "$INSTDIR\data"
+  File /r "${BuildDir}\install\bin\data\*.*"
+  SetOutPath "$INSTDIR"
   File /nonfatal "${DepsDir}\libs-common\x64\*.dll"
   File /nonfatal "${DepsDir}\libs-vs12\x64\*.dll"
   File "${VCRedist}"
@@ -59,6 +61,18 @@ Section "Open Babel" SecOpenBabel
   WriteRegStr HKCU "Software\OpenBabel ${OBVERSION}" "" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenBabel-${OBVERSION}" "DisplayName" "OpenBabel-${OBVERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenBabel-${OBVERSION}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
+
+  ; Open Babel searches BABEL_DATADIR for runtime data files such as
+  ; UFF.prm and ring-fragments-index.txt. Point it at the private data
+  ; directory shipped with this installation.
+  EnVar::SetHKCU
+  Pop $0
+  EnVar::AddValue "BABEL_DATADIR" "$INSTDIR\data"
+  Pop $0
+  StrCmp $0 "0" datadir_added
+    MessageBox MB_OK|MB_ICONSTOP "Failed to configure BABEL_DATADIR. The installation will be aborted. (EnVar error: $0)"
+    Abort
+datadir_added:
 
   ; Update only the current user's PATH. EnVar handles an unset/empty PATH
   ; without copying the process's merged system PATH into HKCU.
@@ -82,6 +96,12 @@ path_added:
 SectionEnd
 
 Section "Uninstall"
+  ; Remove this installation's data directory from BABEL_DATADIR.
+  EnVar::SetHKCU
+  Pop $0
+  EnVar::DeleteValue "BABEL_DATADIR" "$INSTDIR\data"
+  Pop $0
+
   ; Remove only this installation directory from the current user's PATH.
   EnVar::SetHKCU
   Pop $0
